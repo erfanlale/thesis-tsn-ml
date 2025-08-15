@@ -1,0 +1,38 @@
+# OMNeT++ / INET build + simulation outputs
+/out/
+out*/
+*.vec
+*.vci
+*.sca
+*.elog
+*.log
+*.cmp
+*.tkenvlog
+/results/
+results*/
+results_flat/
+simulations/results*/
+opp_makemake.out
+
+# CSV datasets and temporary artifacts
+*.csv
+*.pcap
+*.pcapng
+
+# Models (keep JSON, ignore big binary)
+ml_models/*.keras
+ml_models/*.h5
+# keep frugally-deep JSON + norm stats:
+!ml_models/*_fdeep.json
+!ml_models/*_norm.json
+
+# IDE / editor
+.vscode/
+.idea/
+.project
+.cproject
+.settings/
+
+# OS junk
+.DS_Store
+Thumbs.db
