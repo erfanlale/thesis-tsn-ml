@@ -6,10 +6,10 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <fstream>
 
-// Eigen includes (required for Frugally-Deep)
-#include <Eigen/Dense>
-#include <Eigen/Core>
+// Eigen includes (real Eigen library)
+// Eigen used by frugally-deep internally; we avoid direct heavy use here
 
 // Frugally-Deep includes
 #include <fdeep/fdeep.hpp>
@@ -30,6 +30,7 @@ private:
     
     // Configuration
     std::string model_path;
+    std::string norm_path;
     bool model_loaded;
     double inference_threshold;
     
@@ -47,6 +48,7 @@ private:
     simtime_t last_inference_time;
     long total_inferences;
     double total_inference_time;
+    cMessage *inferenceTimer = nullptr;
 
 public:
     TSNMLInferenceEngine();
@@ -79,6 +81,36 @@ private:
     // Utility functions
     double get_feature_value(const std::string& feature_name);
     void log_inference_results(const std::string& prediction, double confidence);
+
+public:
+    struct MinimalFeatures {
+        double packets_sent;
+        double packets_received;
+        double packets_dropped;
+        double loss_rate;
+        double queue_len_max;
+        double queueing_time_avg;
+        double e2e_delay_avg;
+        double avg_rate_ratio;
+    };
+
+    struct InferenceResult { std::string label; double confidence; };
+
+    InferenceResult inferMinimal(const MinimalFeatures& f);
+
+    // Option A: pull features from DataCollector
+    bool pullAndInferWindow();
+
+    // normalization
+    std::vector<double> norm_mean; // zscore mean aligned to F7 order
+    std::vector<double> norm_std;  // zscore std aligned to F7 order
+    std::ofstream inferenceLog;
+    
+    // Helper to pull minimal 7-feature window from DataCollector
+    bool pullF7FromCollector(std::array<double,7>& f7, simtime_t& t0, simtime_t& t1);
+
+    // Deduplicate processing within same window
+    simtime_t lastWindowEndProcessed = SIMTIME_ZERO;
 };
 
 #endif

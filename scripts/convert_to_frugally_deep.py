@@ -1,202 +1,138 @@
 #!/usr/bin/env python3
-"""
-🎯 Convert Scikit-Learn Model to Frugally-Deep Format
-=====================================================
-Converts trained scikit-learn models to Frugally-Deep JSON format for C++ integration.
-"""
-
-import pandas as pd
-import numpy as np
-import joblib
-import json
+import argparse
+import os
+import sys
 from pathlib import Path
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('model_conversion.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
-def create_frugally_deep_model(model_path: str, output_path: str):
-    """Create a Frugally-Deep compatible model from scikit-learn model"""
-    logger.info(f"🔄 Converting model from: {model_path}")
-    
-    # Load the trained model
-    pipeline = joblib.load(model_path)
-    
-    # Extract components
-    scaler = pipeline.named_steps['scaler']
-    classifier = pipeline.named_steps['classifier']
-    
-    logger.info(f"📊 Model type: {type(classifier).__name__}")
-    logger.info(f"🔢 Number of features: {len(scaler.mean_)}")
-    logger.info(f"🏷️ Number of classes: {len(classifier.classes_)}")
-    
-    # Create a simple neural network equivalent for Frugally-Deep
-    # This is a simplified conversion - in production, you'd use a proper NN
-    
-    # Get feature names (assuming they're available)
-    feature_names = [
-        "total_packets_sent", "total_packets_received", "total_packets_dropped",
-        "packet_loss_rate", "max_queue_length", "avg_queue_length",
-        "avg_queueing_time", "max_end_to_end_delay"
-    ]
-    
-    # Create a simple neural network structure
-    input_size = len(feature_names)
-    hidden_size = 16
-    output_size = 4  # 4 classes: normal, dos_attack, timing_attack, spoofing_attack
-    
-    # Create Frugally-Deep model structure
-    frugally_deep_model = {
-        "architecture": "simple_nn",
-        "input_shape": [input_size],
-        "output_shape": [output_size],
-        "layers": [
-            {
-                "type": "dense",
-                "units": hidden_size,
-                "activation": "relu",
-                "weights": create_random_weights(input_size, hidden_size),
-                "bias": create_random_bias(hidden_size)
-            },
-            {
-                "type": "dense", 
-                "units": output_size,
-                "activation": "softmax",
-                "weights": create_random_weights(hidden_size, output_size),
-                "bias": create_random_bias(output_size)
-            }
-        ],
-        "metadata": {
-            "feature_names": feature_names,
-            "class_names": ["normal", "dos_attack", "timing_attack", "spoofing_attack"],
-            "scaler_mean": scaler.mean_.tolist(),
-            "scaler_scale": scaler.scale_.tolist(),
-            "model_type": "random_forest_converted"
-        }
-    }
-    
-    # Save the model
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_file, 'w') as f:
-        json.dump(frugally_deep_model, f, indent=2)
-    
-    logger.info(f"✅ Model saved to: {output_file}")
-    
-    # Create a simple test input
-    test_input = np.random.random(input_size).tolist()
-    test_output = {
-        "input": test_input,
-        "expected_output_shape": [output_size],
-        "description": "Test input for model validation"
-    }
-    
-    test_file = output_file.parent / "test_input.json"
-    with open(test_file, 'w') as f:
-        json.dump(test_output, f, indent=2)
-    
-    logger.info(f"✅ Test input saved to: {test_file}")
-    
-    return output_file
+def _patch_keras_for_converter() -> None:
+	# Patch Keras internals expected by frugally-deep converter without touching its code
+	import importlib
+	import keras  # type: ignore
 
-def create_random_weights(input_size: int, output_size: int):
-    """Create random weights for neural network layer"""
-    # Initialize with small random values
-    weights = np.random.randn(input_size, output_size) * 0.1
-    return weights.tolist()
+	# Ensure tf_utils.is_tensor_or_tensor_list exists
+	try:
+		tf_utils = importlib.import_module('keras.src.utils.tf_utils')
+		if not hasattr(tf_utils, 'is_tensor_or_tensor_list'):
+			try:
+				from keras.src.backend import is_tensor as _is_tensor  # type: ignore
+			except Exception:
+				_is_tensor = None
 
-def create_random_bias(size: int):
-    """Create random bias for neural network layer"""
-    bias = np.random.randn(size) * 0.1
-    return bias.tolist()
+			def _is_tensor_or_tensor_list(x):  # type: ignore
+				try:
+					if _is_tensor is not None and _is_tensor(x):
+						return True
+				except Exception:
+					pass
+				if isinstance(x, (list, tuple)):
+					for t in x:
+						try:
+							if _is_tensor is None or not _is_tensor(t):
+								return False
+						except Exception:
+							return False
+					return True
+				return False
 
-def create_simple_rule_based_model(output_path: str):
-    """Create a simple rule-based model for demonstration"""
-    logger.info("🎯 Creating simple rule-based model for Frugally-Deep")
-    
-    # Create a simple decision tree equivalent
-    model = {
-        "architecture": "rule_based",
-        "input_shape": [8],
-        "output_shape": [4],
-        "rules": [
-            {
-                "condition": "packet_loss_rate > 0.1",
-                "output": [0.0, 0.8, 0.1, 0.1],  # High confidence for dos_attack
-                "attack_type": "dos_attack"
-            },
-            {
-                "condition": "max_end_to_end_delay > 0.05", 
-                "output": [0.0, 0.1, 0.8, 0.1],  # High confidence for timing_attack
-                "attack_type": "timing_attack"
-            },
-            {
-                "condition": "max_queue_length > 20",
-                "output": [0.0, 0.1, 0.1, 0.8],  # High confidence for spoofing_attack
-                "attack_type": "spoofing_attack"
-            },
-            {
-                "condition": "default",
-                "output": [0.9, 0.05, 0.025, 0.025],  # High confidence for normal
-                "attack_type": "normal"
-            }
-        ],
-        "metadata": {
-            "feature_names": [
-                "total_packets_sent", "total_packets_received", "total_packets_dropped",
-                "packet_loss_rate", "max_queue_length", "avg_queue_length",
-                "avg_queueing_time", "max_end_to_end_delay"
-            ],
-            "class_names": ["normal", "dos_attack", "timing_attack", "spoofing_attack"],
-            "model_type": "rule_based_detector"
-        }
-    }
-    
-    # Save the model
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_file, 'w') as f:
-        json.dump(model, f, indent=2)
-    
-    logger.info(f"✅ Rule-based model saved to: {output_file}")
-    return output_file
+			setattr(tf_utils, 'is_tensor_or_tensor_list', _is_tensor_or_tensor_list)
+	except Exception:
+		pass
 
-def main():
-    """Main execution function"""
-    print("🚀 Converting Scikit-Learn Model to Frugally-Deep Format")
-    print("="*60)
-    
-    # Paths
-    current_dir = Path(__file__).parent
-    model_path = current_dir.parent / "ml_models" / "trained_models" / "random_forest_model.joblib"
-    output_path = current_dir.parent / "ml_models" / "frugally_deep_model.json"
-    
-    try:
-        # Check if trained model exists
-        if model_path.exists():
-            logger.info("📂 Found trained model, converting...")
-            create_frugally_deep_model(str(model_path), str(output_path))
-        else:
-            logger.warning("⚠️ Trained model not found, creating rule-based model...")
-            create_simple_rule_based_model(str(output_path))
-        
-        logger.info("🎉 Model conversion completed successfully!")
-        
-    except Exception as e:
-        logger.error(f"❌ Model conversion failed: {str(e)}")
-        raise
+	# Re-export image preprocessing symbols commonly imported by converter
+	try:
+		img_prep = importlib.import_module('keras.src.layers.preprocessing.image_preprocessing')
+		pkg_path = Path(img_prep.__file__).parent
+		for py in pkg_path.glob('*.py'):
+			if py.name == '__init__.py':
+				continue
+			mod_name = f"keras.src.layers.preprocessing.image_preprocessing.{py.stem}"
+			try:
+				subm = importlib.import_module(mod_name)
+			except Exception:
+				continue
+			for attr in dir(subm):
+				if attr.startswith('_'):
+					continue
+				try:
+					val = getattr(subm, attr)
+				except Exception:
+					continue
+				if not hasattr(img_prep, attr):
+					try:
+						setattr(img_prep, attr, val)
+					except Exception:
+						pass
+		# Ensure Rescaling in package
+		if not hasattr(img_prep, 'Rescaling'):
+			try:
+				from keras.src.layers.preprocessing.rescaling import Rescaling as _Rescaling  # type: ignore
+				setattr(img_prep, 'Rescaling', _Rescaling)
+			except Exception:
+				pass
+		# Provide placeholders for rare imports
+		class _DummyLayer:
+			def __init__(self, *args, **kwargs):
+				pass
+		for name in ['RandomHeight', 'RandomWidth']:
+			if not hasattr(img_prep, name):
+				setattr(img_prep, name, _DummyLayer)
+	except Exception:
+		pass
 
-if __name__ == "__main__":
+	# Normalization: alias SyncBatchNormalization to BatchNormalization if missing
+	try:
+		bn_mod = importlib.import_module('keras.src.layers.normalization.batch_normalization')
+		if not hasattr(bn_mod, 'SyncBatchNormalization') and hasattr(bn_mod, 'BatchNormalization'):
+			setattr(bn_mod, 'SyncBatchNormalization', getattr(bn_mod, 'BatchNormalization'))
+		# Also provide BatchNormalizationBase if converter expects it
+		if not hasattr(bn_mod, 'BatchNormalizationBase') and hasattr(bn_mod, 'BatchNormalization'):
+			setattr(bn_mod, 'BatchNormalizationBase', getattr(bn_mod, 'BatchNormalization'))
+	except Exception:
+		pass
+
+	# Ensure keras.Layer at top-level
+	try:
+		if not hasattr(keras, 'Layer'):
+			layers_mod = importlib.import_module('keras.layers')
+			setattr(keras, 'Layer', getattr(layers_mod, 'Layer'))
+	except Exception:
+		pass
+
+
+def main() -> None:
+	parser = argparse.ArgumentParser(description='Convert Keras model to frugally-deep JSON')
+	parser.add_argument('input_path', type=str)
+	parser.add_argument('output_path', type=str)
+	parser.add_argument('--no-tests', action='store_true')
+	args = parser.parse_args()
+
+	# Remove any OMNeT++ venv contamination from sys.path and env
+	omnet_venv_tag = '/omnetpp-6.1/.venv'
+	sys.path[:] = [p for p in sys.path if omnet_venv_tag not in p]
+	for var in ['PYTHONPATH', 'VIRTUAL_ENV']:
+		if var in os.environ:
+			os.environ.pop(var)
+	os.environ['PYTHONNOUSERSITE'] = '1'
+
+	_patch_keras_for_converter()
+
+	# Import and call converter directly in-process so our patches are in effect
+	repo_root = Path(__file__).resolve().parents[1]
+	sys.path.insert(0, str((repo_root.parent / 'frugally-deep' / 'keras_export')))
+	# Ensure tf_utils has shape_type_conversion decorator if missing
+	try:
+		import importlib as _il
+		tf_utils = _il.import_module('keras.src.utils.tf_utils')
+		if not hasattr(tf_utils, 'shape_type_conversion'):
+			def _shape_type_conversion(fn):
+				return fn
+			setattr(tf_utils, 'shape_type_conversion', _shape_type_conversion)
+	except Exception:
+		pass
+	import convert_model  # type: ignore
+	convert_model.convert(args.input_path, args.output_path, args.no_tests)
+
+
+if __name__ == '__main__':
     main() 

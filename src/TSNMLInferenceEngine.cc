@@ -1,4 +1,5 @@
 #include "TSNMLInferenceEngine.h"
+#include "DataCollector.h"
 #include <iostream>
 #include <fstream>
 #include <chrono>
@@ -28,7 +29,8 @@ void TSNMLInferenceEngine::initialize()
     
     // Get configuration parameters
     model_path = par("modelPath").stringValue();
-    inference_threshold = par("inferenceThreshold").doubleValue();
+    if (hasPar("normPath")) norm_path = par("normPath").stringValue();
+    inference_threshold = par("anomalyThreshold").doubleValue();
     
     EV_INFO << "📂 Model path: " << model_path << endl;
     EV_INFO << "🎯 Inference threshold: " << inference_threshold << endl;
@@ -38,11 +40,12 @@ void TSNMLInferenceEngine::initialize()
     inference_latency_signal = registerSignal("inferenceLatency");
     confidence_signal = registerSignal("detectionConfidence");
     
-    // Initialize feature columns (hardcoded for now, should be loaded from metadata)
+    // Minimal 7-feature order used by training/inference (F7)
+    // [throughput_bps_tx, throughput_bps_rx, packets_sent, packets_received, packets_dropped, drop_rate, queue_length_max]
     feature_columns = {
-        "total_packets_sent", "total_packets_received", "total_packets_dropped",
-        "packet_loss_rate", "max_queue_length", "avg_queue_length",
-        "avg_queueing_time", "max_end_to_end_delay"
+        "throughput_bps_tx","throughput_bps_rx",
+        "packets_sent","packets_received","packets_dropped","drop_rate",
+        "queue_length_max"
     };
     
     label_classes = {"normal", "dos_attack", "timing_attack", "spoofing_attack"};
@@ -51,6 +54,30 @@ void TSNMLInferenceEngine::initialize()
     if (load_ml_model()) {
         EV_INFO << "✅ ML model loaded successfully!" << endl;
         model_loaded = true;
+        // Open inference log
+        std::string cfg = getEnvir()->getConfigEx()->getVariable("configname");
+        if (cfg.empty()) cfg = "run";
+        std::string rep = getEnvir()->getConfigEx()->getVariable("repetition");
+        if (rep.empty()) rep = "0";
+        std::string runId = cfg + "-#" + rep;
+        // Place inference logs next to the model file directory (usually project-root/ml_models)
+        std::string outDir;
+        {
+            outDir = model_path;
+            auto pos = outDir.find_last_of('/');
+            if (pos != std::string::npos) outDir = outDir.substr(0, pos);
+            else outDir = ".";
+        }
+        std::string outPath = outDir + "/inference_" + runId + ".csv";
+        // Ensure directory exists before opening (relative to current working dir)
+        {
+            std::string cmd = std::string("mkdir -p ") + outDir;
+            int rc = system(cmd.c_str()); (void)rc;
+        }
+        inferenceLog.open(outPath);
+        if (inferenceLog.is_open()) {
+            inferenceLog << "timestamp,p_normal,p_anomaly,is_anomaly,threshold\n";
+        }
     } else {
         EV_ERROR << "❌ Failed to load ML model!" << endl;
         model_loaded = false;
@@ -62,22 +89,39 @@ void TSNMLInferenceEngine::initialize()
         feature_history[feature] = std::vector<double>();
     }
     
+    // Load normalization stats (if present)
+    try {
+        if (!norm_path.empty()) {
+            std::ifstream jf(norm_path);
+            if (jf.good()) {
+                std::string s((std::istreambuf_iterator<char>(jf)), std::istreambuf_iterator<char>());
+                // naive parse without dependency
+                auto get_array = [&](const std::string &key){
+                    std::vector<double> v; size_t p=s.find("\""+key+"\""); if(p==std::string::npos) return v; p=s.find('[',p); size_t e=s.find(']',p); if(e==std::string::npos) return v; std::string a=s.substr(p+1,e-p-1); size_t i=0; while(i<a.size()){ size_t j=a.find(',',i); std::string t=a.substr(i,(j==std::string::npos? a.size():j)-i); try{ v.push_back(std::stod(t)); }catch(...){} if(j==std::string::npos) break; i=j+1;} return v; };
+                norm_mean = get_array("mean");
+                norm_std  = get_array("std");
+            }
+        }
+    } catch (...) {}
+
+    // Start periodic inference timer
+    if (!inferenceTimer) {
+        inferenceTimer = new cMessage("inferenceTimer");
+    }
+    scheduleAt(simTime() + par("inferenceInterval"), inferenceTimer);
+
     EV_INFO << "🎯 TSN ML Inference Engine ready for real-time attack detection!" << endl;
 }
 
 void TSNMLInferenceEngine::handleMessage(cMessage *msg)
 {
-    // Extract features from incoming message
-    extract_real_time_features();
-    
-    // Perform ML inference
-    if (model_loaded && perform_inference()) {
-        // Attack detected
-        emit_attack_signal();
+    if (msg == inferenceTimer) {
+        // Pull current window from DataCollector and infer at fixed cadence
+        pullAndInferWindow();
+        scheduleAt(simTime() + par("inferenceInterval"), inferenceTimer);
+    } else {
+        delete msg;
     }
-    
-    // Clean up message
-    delete msg;
 }
 
 void TSNMLInferenceEngine::finish()
@@ -94,6 +138,99 @@ void TSNMLInferenceEngine::finish()
             EV_INFO << "   Attack type: " << detected_attack_type << endl;
             EV_INFO << "   Confidence: " << detection_confidence << endl;
         }
+    }
+    if (inferenceTimer) {
+        cancelAndDelete(inferenceTimer);
+        inferenceTimer = nullptr;
+    }
+    if (inferenceLog.is_open()) inferenceLog.close();
+}
+
+TSNMLInferenceEngine::InferenceResult TSNMLInferenceEngine::inferMinimal(const MinimalFeatures& f)
+{
+    InferenceResult r{"unknown", 0.0};
+    try {
+        if (!ml_model) return r;
+        std::vector<float> v = {
+            static_cast<float>(f.packets_sent),
+            static_cast<float>(f.packets_received),
+            static_cast<float>(f.packets_dropped),
+            static_cast<float>(f.loss_rate),
+            static_cast<float>(f.queue_len_max),
+            static_cast<float>(f.queueing_time_avg),
+            static_cast<float>(f.e2e_delay_avg),
+            static_cast<float>(f.avg_rate_ratio)
+        };
+        const auto input = fdeep::tensor(fdeep::tensor_shape(static_cast<std::size_t>(v.size())), v);
+        const auto t0 = std::chrono::high_resolution_clock::now();
+        const auto out = ml_model->predict({input});
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        const auto out_vec = out.front().to_vector();
+        std::size_t argmax = 0; float best = out_vec[0];
+        for (std::size_t i=1;i<out_vec.size();++i) if (out_vec[i] > best) { best = out_vec[i]; argmax = i; }
+        r.confidence = best;
+        r.label = (argmax < label_classes.size()) ? label_classes[argmax] : std::string("class_") + std::to_string(argmax);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        emit(inference_latency_signal, duration.count()/1000.0);
+        return r;
+    } catch (...) {
+        return r;
+    }
+}
+
+bool TSNMLInferenceEngine::pullAndInferWindow()
+{
+    try {
+        if (!model_loaded || !ml_model) return false;
+        // Pull from DataCollector
+        cModule *sys = getSystemModule();
+        if (!sys) return false;
+        auto *dc = dynamic_cast<DataCollector*>(sys->getSubmodule("dataCollector"));
+        if (!dc) return false;
+        const auto &w = dc->getLastWindow();
+        if (!w.ready) return false;
+        // Build F7
+        std::vector<float> in;
+        in.reserve(7);
+        for (int i=0;i<7;i++) in.push_back(static_cast<float>(w.f[i]));
+        // Normalize if available
+        if (norm_mean.size() == 7 && norm_std.size() == 7) {
+            for (int i=0;i<7;i++) {
+                double denom = (norm_std[i] == 0.0 ? 1.0 : norm_std[i]);
+                in[i] = static_cast<float>((w.f[i] - norm_mean[i]) / denom);
+            }
+        }
+        const auto t0 = std::chrono::high_resolution_clock::now();
+        const auto input = fdeep::tensor(fdeep::tensor_shape(static_cast<std::size_t>(in.size())), in);
+        const auto out = ml_model->predict({input});
+        const auto t1 = std::chrono::high_resolution_clock::now();
+        double p_normal = 0.0, p_anomaly = 0.0;
+        if (!out.empty()) {
+            const auto vec = out.front().to_vector();
+            if (vec.size() >= 2) {
+                p_normal = vec[0];
+                p_anomaly = vec[1];
+            } else if (vec.size() == 1) {
+                p_anomaly = vec[0];
+                p_normal = 1.0 - p_anomaly;
+            }
+        }
+        double thr = par("anomalyThreshold");
+        bool is_anomaly = p_anomaly > thr;
+        auto dur = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+        total_inference_time += dur.count() / 1000.0;
+        total_inferences++;
+        emit(inference_latency_signal, dur.count()/1000.0);
+        emit(confidence_signal, p_anomaly);
+        attack_detected = is_anomaly;
+        detected_attack_type = is_anomaly ? std::string("anomaly") : std::string("normal");
+        detection_confidence = p_anomaly;
+        if (inferenceLog.is_open()) {
+            inferenceLog << SIMTIME_DBL(simTime()) << "," << p_normal << "," << p_anomaly << "," << (is_anomaly?1:0) << "," << thr << "\n";
+        }
+        return true;
+    } catch (...) {
+        return false;
     }
 }
 

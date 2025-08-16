@@ -6,8 +6,8 @@ import inet.node.tsn.TsnSwitch;
 import inet.node.tsn.TsnClock;
 import inet.node.ethernet.Eth100M;
 import inet.node.ethernet.Eth1G;
-import simulations.DataCollector;
-import simulations.TSNMLInferenceEngine;
+import src.DataCollector;
+import src.TSNMLInferenceEngine;
 
 //
 // Minimal TSN Attack Network for ML-based Intrusion Detection
@@ -31,10 +31,10 @@ network MinimalAttackNetwork extends TsnNetworkBase
             @display("p=50,350;i=block/process");
         }
         
-        // ML Inference Engine (temporarily disabled for testing)
-        //mlInferenceEngine: TSNMLInferenceEngine {
-        //    @display("p=50,250;i=block/cogwheel");
-        //}
+        // ML Inference Engine
+        mlInferenceEngine: TSNMLInferenceEngine {
+            @display("p=50,250;i=block/cogwheel");
+        }
         
         // Master clock for TSN time synchronization
         masterClock: TsnClock {

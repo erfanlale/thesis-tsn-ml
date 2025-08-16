@@ -19,7 +19,7 @@ USERIF_LIBS = $(ALL_ENV_LIBS) # that is, $(QTENV_LIBS) $(CMDENV_LIBS)
 #USERIF_LIBS = $(QTENV_LIBS)
 
 # C++ include paths (with -I)
-INCLUDE_PATH = -I../../frugally-deep/include -I../../FunctionalPlus/include -I/usr/include/eigen3 -I/usr/include/nlohmann
+INCLUDE_PATH = -I../../frugally-deep/include -I../../FunctionalPlus/include -I../../eigen-3.4.0 -I/usr/include/nlohmann
 
 # Additional object and library files to link with
 EXTRA_OBJS =
