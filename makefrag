@@ -1,0 +1,5 @@
+INCLUDE_PATH += -I/usr/include/eigen3 \
+-I/media/eriloo/SharedRoom1/omnetpp-ml-workspace/eigen-3.4.0/eigen-3.4.0 \
+-I/media/eriloo/SharedRoom1/omnetpp-ml-workspace/frugally-deep/include \
+-I/media/eriloo/SharedRoom1/omnetpp-ml-workspace/FunctionalPlus/include \
+-I/media/eriloo/SharedRoom1/omnetpp-ml-workspace/json-develop/single_include
