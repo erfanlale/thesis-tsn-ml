@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <chrono>
+#include <cmath>
 
 Define_Module(TSNMLInferenceEngine);
 
@@ -40,12 +41,17 @@ void TSNMLInferenceEngine::initialize()
     inference_latency_signal = registerSignal("inferenceLatency");
     confidence_signal = registerSignal("detectionConfidence");
     
-    // Minimal 7-feature order used by training/inference (F7)
-    // [throughput_bps_tx, throughput_bps_rx, packets_sent, packets_received, packets_dropped, drop_rate, queue_length_max]
+    // Extended 15-feature order aligned with training feature_order
+    // [throughput_bps_tx, packets_sent, packets_received, packets_dropped, drop_rate, queue_length_max,
+    //  ptp_offset_mean, ptp_offset_max, rate_ratio_mean, peer_delay_mean,
+    //  e2e_delay_avg, e2e_delay_max, e2e_delay_std, has_ptp, has_e2e]
     feature_columns = {
-        "throughput_bps_tx","throughput_bps_rx",
+        "throughput_bps_tx",
         "packets_sent","packets_received","packets_dropped","drop_rate",
-        "queue_length_max"
+        "queue_length_max",
+        "ptp_offset_mean","ptp_offset_max","rate_ratio_mean","peer_delay_mean",
+        "e2e_delay_avg","e2e_delay_max","e2e_delay_std",
+        "has_ptp","has_e2e"
     };
     
     label_classes = {"normal", "dos_attack", "timing_attack", "spoofing_attack"};
@@ -76,7 +82,9 @@ void TSNMLInferenceEngine::initialize()
         }
         inferenceLog.open(outPath);
         if (inferenceLog.is_open()) {
-            inferenceLog << "timestamp,p_normal,p_anomaly,is_anomaly,threshold\n";
+            inferenceLog << "ts,t0,t1,p_normal,p_anomaly,pred_label,gt_label,"
+                         << "f0_thr_tx,f1_pkts_sent,f2_pkts_recv,f3_pkts_drop,f4_drop_rate,f5_queue_len_max,"
+                         << "f6_ptp_off_mean,f7_ptp_off_max,f8_rate_ratio_mean,f9_peer_delay_mean,f10_e2e_avg,f11_e2e_max,f12_e2e_std,f13_has_ptp,f14_has_e2e,threshold\n";
         }
     } else {
         EV_ERROR << "❌ Failed to load ML model!" << endl;
@@ -100,6 +108,10 @@ void TSNMLInferenceEngine::initialize()
                     std::vector<double> v; size_t p=s.find("\""+key+"\""); if(p==std::string::npos) return v; p=s.find('[',p); size_t e=s.find(']',p); if(e==std::string::npos) return v; std::string a=s.substr(p+1,e-p-1); size_t i=0; while(i<a.size()){ size_t j=a.find(',',i); std::string t=a.substr(i,(j==std::string::npos? a.size():j)-i); try{ v.push_back(std::stod(t)); }catch(...){} if(j==std::string::npos) break; i=j+1;} return v; };
                 norm_mean = get_array("mean");
                 norm_std  = get_array("std");
+                // optional: read recommended threshold if present
+                auto get_num = [&](const std::string &key){ size_t p=s.find("\""+key+"\""); if(p==std::string::npos) return 0.0; p=s.find(':',p); if(p==std::string::npos) return 0.0; size_t e=p+1; while(e<s.size() && (s[e]==' '||s[e]=='\t')) e++; size_t e2=e; while(e2<s.size() && (isdigit(s[e2])||s[e2]=='.')) e2++; try{ return std::stod(s.substr(e,e2-e)); }catch(...){return 0.0;}};
+                double thrRec = get_num("recommended_threshold");
+                if (thrRec > 0.0 && thrRec < 1.0) inference_threshold = thrRec;
             }
         }
     } catch (...) {}
@@ -188,16 +200,38 @@ bool TSNMLInferenceEngine::pullAndInferWindow()
         auto *dc = dynamic_cast<DataCollector*>(sys->getSubmodule("dataCollector"));
         if (!dc) return false;
         const auto &w = dc->getLastWindow();
-        if (!w.ready) return false;
-        // Build F7
+        const auto &we = dc->getLastWindowExtended();
+        if (!w.ready && !we.ready) return false;
         std::vector<float> in;
-        in.reserve(7);
-        for (int i=0;i<7;i++) in.push_back(static_cast<float>(w.f[i]));
-        // Normalize if available
-        if (norm_mean.size() == 7 && norm_std.size() == 7) {
-            for (int i=0;i<7;i++) {
-                double denom = (norm_std[i] == 0.0 ? 1.0 : norm_std[i]);
-                in[i] = static_cast<float>((w.f[i] - norm_mean[i]) / denom);
+        if (we.ready) {
+            // Copy and apply missing-value semantics: timing features -1.0 => NaN
+            double tmp[15];
+            for (int i=0;i<15;i++) tmp[i] = we.f[i];
+            for (int i=6;i<=12;i++) if (tmp[i] < 0.0) tmp[i] = std::numeric_limits<double>::quiet_NaN();
+            // Normalize and impute NaNs to 0 after z-score, matching trainer
+            in.reserve(15);
+            if (norm_mean.size() == 15 && norm_std.size() == 15) {
+                for (int i=0;i<15;i++) {
+                    if (std::isnan(tmp[i])) { in.push_back(0.0f); continue; }
+                    double denom = (norm_std[i] == 0.0 ? 1.0 : norm_std[i]);
+                    float v = static_cast<float>((tmp[i] - norm_mean[i]) / denom);
+                    if (std::isnan(v) || !std::isfinite(v)) v = 0.0f;
+                    in.push_back(v);
+                }
+            } else {
+                for (int i=0;i<15;i++) {
+                    float v = std::isnan(tmp[i]) ? 0.0f : static_cast<float>(tmp[i]);
+                    in.push_back(v);
+                }
+            }
+        } else {
+            in.reserve(7);
+            for (int i=0;i<7;i++) in.push_back(static_cast<float>(w.f[i]));
+            if (norm_mean.size() == 7 && norm_std.size() == 7) {
+                for (int i=0;i<7;i++) {
+                    double denom = (norm_std[i] == 0.0 ? 1.0 : norm_std[i]);
+                    in[i] = static_cast<float>((w.f[i] - norm_mean[i]) / denom);
+                }
             }
         }
         const auto t0 = std::chrono::high_resolution_clock::now();
@@ -226,7 +260,24 @@ bool TSNMLInferenceEngine::pullAndInferWindow()
         detected_attack_type = is_anomaly ? std::string("anomaly") : std::string("normal");
         detection_confidence = p_anomaly;
         if (inferenceLog.is_open()) {
-            inferenceLog << SIMTIME_DBL(simTime()) << "," << p_normal << "," << p_anomaly << "," << (is_anomaly?1:0) << "," << thr << "\n";
+            auto labelFor = [&](double t0d, double t1d)->std::string{
+                std::string cfg = getEnvir()->getConfigEx()->getVariable("configname");
+                if (cfg == "Baseline") return "normal";
+                auto overlaps = [](double ws, double we, double as, double ae){ const double eps=1e-12; return (ws < ae - eps) && (we > as + eps); };
+                if (cfg == "DoSAttack") return overlaps(t0d, t1d, 0.100, 0.400) ? std::string("dos_attack") : std::string("normal");
+                if (cfg == "TimingAttack") return overlaps(t0d, t1d, 0.050, 0.450) ? std::string("timing_attack") : std::string("normal");
+                if (cfg == "SpoofingAttack") return overlaps(t0d, t1d, 0.150, 0.350) ? std::string("spoofing_attack") : std::string("normal");
+                return std::string("normal");
+            };
+            const double tnow = SIMTIME_DBL(simTime());
+            const double t0d = we.ready ? we.t0.dbl() : w.t0.dbl();
+            const double t1d = we.ready ? we.t1.dbl() : w.t1.dbl();
+            std::string gt = labelFor(t0d, t1d);
+            std::string predLabel = is_anomaly ? std::string("anomaly") : std::string("normal");
+            inferenceLog << tnow << "," << t0d << "," << t1d << ","
+                         << p_normal << "," << p_anomaly << "," << predLabel << "," << gt << ","
+                         << (we.ready? we.f[0]: w.f[0]) << "," << (we.ready? we.f[1]: w.f[1]) << "," << (we.ready? we.f[2]: w.f[2]) << "," << (we.ready? we.f[3]: w.f[3]) << ","
+                         << (we.ready? we.f[4]: w.f[4]) << "," << (we.ready? we.f[5]: w.f[5]) << "," << (we.ready? we.f[6]: w.f[6]) << "," << thr << "\n";
         }
         return true;
     } catch (...) {

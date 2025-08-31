@@ -21,16 +21,13 @@ public:
     CsvWriter writer;
     std::unordered_map<std::string,double> lastTsByKey;
     std::unordered_map<std::string,PrevStreamsBuffer> prevStreamsByKey;
+    // New: per-stream and per-vantage tracking
+    std::unordered_map<std::string,double> lastTsByStreamId;
+    std::unordered_map<std::string,PrevStreamsBuffer> prevStreamsByVantage;
 
     explicit PerPacketCsvWriter(const std::string& path): writer(path) {}
 
-    void writeHeader() {
-        writer.setHeader({
-            "run","repetition","config","node","port","module","name",
-            "ts","dt","stream_id","prev1","prev2","prev3",
-            "src_mac","dst_mac","len_bytes","tree_id","rx_ok"
-        });
-    }
+    void writeHeader() {}
 };
 
 #endif

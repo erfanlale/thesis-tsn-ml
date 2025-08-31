@@ -1,0 +1,37 @@
+# Cross-platform makefrag for MinimalPSFP-Attack-ML
+# Automatically detects OS and sets correct paths
+
+# Detect OS and set paths accordingly
+ifeq ($(PLATFORM),win32)
+# Windows paths (using Windows-style separators and drive letters)
+INET4_5_PROJ := D:/omnetpp-ml-workspace/inet4.5
+FRUGALLYDEEP_PROJ := D:/omnetpp-ml-workspace/frugally-deep
+JSON_PROJ := D:/omnetpp-ml-workspace/json-develop
+EIGEN_PROJ := D:/omnetpp-ml-workspace/eigen-3.4.0
+else
+# Linux/Unix paths (using forward slashes)
+INET4_5_PROJ := /media/eriloo/SharedRoom1/omnetpp-ml-workspace/inet4.5
+FRUGALLYDEEP_PROJ := /media/eriloo/SharedRoom1/omnetpp-ml-workspace/frugally-deep
+JSON_PROJ := /media/eriloo/SharedRoom1/omnetpp-ml-workspace/json-develop
+EIGEN_PROJ := /media/eriloo/SharedRoom1/omnetpp-ml-workspace/eigen-3.4.0
+endif
+
+# Set include paths - only INET src folder, never repo root
+INCLUDE_PATH := \
+    -I$(INET4_5_PROJ)/src \
+    -I$(FRUGALLYDEEP_PROJ)/include \
+    -I$(JSON_PROJ)/single_include \
+    -I$(EIGEN_PROJ)/eigen-3.4.0 \
+    -I.
+
+# Update library paths
+LIBS := $(LDFLAG_LIBPATH)$(INET4_5_PROJ)/src -lINET$(D)
+
+# Platform-specific library handling
+ifeq ($(PLATFORM),win32)
+# Windows: Use Windows-style paths
+LIBS += -L$(subst /,\,$(INET4_5_PROJ)/src)
+else
+# Unix/Linux: Use rpath for runtime library path
+LIBS += -Wl,-rpath,$(abspath $(INET4_5_PROJ)/src)
+endif

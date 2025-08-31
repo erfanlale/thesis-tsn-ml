@@ -1,0 +1,6 @@
+{
+  "normal": 11000,
+  "timing_attack": 4000,
+  "dos_attack": 3000,
+  "spoofing_attack": 2000
+}

@@ -22,6 +22,9 @@ simple DataCollector
         bool emitRaw = default(false);                 // Output raw JSON per event (debug only)
         bool emitNDJSON = default(false);              // Output newline-delimited JSON
         bool emitPerStreamRows = default(false);       // Also write per-stream aggregate rows per window
+        bool emitPCPBreakdowns = default(false);        // Include wide PCP-sliced columns in CSV
+        bool includeControlFramesInThroughput = default(false); // Count control frames in throughput
+        bool emitZeroIfNoSamples = default(true);               // If false, write -1.0 when no samples
         
         // Signal capture configuration  
         bool enableSignalCapture = default(true);

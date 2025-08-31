@@ -107,13 +107,8 @@ def main() -> None:
 	parser.add_argument('--no-tests', action='store_true')
 	args = parser.parse_args()
 
-	# Remove any OMNeT++ venv contamination from sys.path and env
-	omnet_venv_tag = '/omnetpp-6.1/.venv'
-	sys.path[:] = [p for p in sys.path if omnet_venv_tag not in p]
-	for var in ['PYTHONPATH', 'VIRTUAL_ENV']:
-		if var in os.environ:
-			os.environ.pop(var)
-	os.environ['PYTHONNOUSERSITE'] = '1'
+	# Use the current Python environment as-is to ensure keras/tf are importable
+	# (No env stripping; rely on caller to choose the right interpreter)
 
 	_patch_keras_for_converter()
 
