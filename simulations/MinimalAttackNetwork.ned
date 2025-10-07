@@ -18,66 +18,66 @@ import src.TSNMLInferenceEngine;
 // - 3 legitimate devices (ECU, sensor, display)
 // - 2 attack nodes (external attacker, compromised node)
 //
-// Total: 7 nodes (compared to 22 in the complex version)
+// Total: 7 nodes
 //
 network MinimalAttackNetwork extends TsnNetworkBase
 {
     parameters:
-        @display("bgi=background/car_simple;bgb=800,600");
+        @display("bgi=background/car;bgb=1280,720");
 
     submodules:
         // ML Feature Collector - ENABLED for real-time data collection
         dataCollector: DataCollector {
-            @display("p=50,350;i=block/process");
+            @display("p=150,520;i=block/blackboard;is=32");
         }
-        
+
         // ML Inference Engine
         mlInferenceEngine: TSNMLInferenceEngine {
-            @display("p=50,250;i=block/cogwheel");
+            @display("p=150,420;i=block/cogwheel;is=32");
         }
-        
+
         // Master clock for TSN time synchronization
         masterClock: TsnClock {
-            @display("p=400,300;i=device/card");
+            @display("p=600,410;i=device/clock;is=32");
         }
-        
+
         // Single central TSN switch
         centralSwitch: TsnSwitch {
-            @display("p=400,200");
+            @display("p=600,340;i=device/switch;is=36");
         }
-        
+
         // Essential legitimate devices
         mainECU: TsnDevice {
-            @display("p=300,100;i=device/server");
+            @display("p=599,249;i=device/server;is=32");
         }
-        
+
         criticalSensor: TsnDevice {
-            @display("p=500,100;i=device/sensor");
+            @display("p=798,482;i=device/card;is=32");
         }
-        
+
         display: TsnDevice {
-            @display("p=400,100;i=device/monitor");
+            @display("p=800,250;i=device/card;is=32");
         }
-        
+
         // Attack components for testing
         attackerExternal: TsnDevice {
-            @display("p=200,200;i=device/laptop,red");
+            @display("p=1100,300;i=device/laptop,red;is=32");
         }
-        
+
         compromisedNode: TsnDevice {
-            @display("p=600,200;i=device/laptop,orange");
+            @display("p=799,360;i=device/laptop,orange;is=32");
         }
 
     connections:
         // Master clock connection (TSN time synchronization)
         masterClock.ethg++ <--> Eth100M <--> centralSwitch.ethg++;
-        
+
         // Legitimate device connections
         centralSwitch.ethg++ <--> Eth1G <--> mainECU.ethg++;
         centralSwitch.ethg++ <--> Eth100M <--> criticalSensor.ethg++;
         centralSwitch.ethg++ <--> Eth100M <--> display.ethg++;
-        
+
         // Attack component connections
         centralSwitch.ethg++ <--> Eth100M <--> attackerExternal.ethg++;
         centralSwitch.ethg++ <--> Eth100M <--> compromisedNode.ethg++;
-} 
+}

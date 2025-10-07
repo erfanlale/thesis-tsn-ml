@@ -94,7 +94,7 @@ int DataCollector::parseGateIndexFromPath(const std::string& path) const {
     try { return std::stoi(path.substr(lb+1, rb-lb-1)); } catch(...) { return -1; }
 }
 
-DataCollector::DataCollector() : csv("/dev/null"), packetCsv("/dev/null"), streamCsv("/dev/null")
+DataCollector::DataCollector() : csv("/dev/null"), streamCsv("/dev/null")
 {
     windowSize = 0.005; // 5ms default
     emitCSV = true;
@@ -405,7 +405,6 @@ void DataCollector::finish()
     // Ensure final contents are on disk
     if (emitCSV) {
         csv.flush();
-        packetCsv.writer.flush();
         streamCsv.flush();
     }
 

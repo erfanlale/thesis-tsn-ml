@@ -1,8 +1,8 @@
 version 3
-run SpoofingAttack-0-20250831-17:11:04-453191
+run SpoofingAttack-0-20251002-17:52:30-147909
 attr configname SpoofingAttack
-attr datetime 20250831-17:11:04
-attr datetimef 20250831-171104
+attr datetime 20251002-17:52:30
+attr datetimef 20251002-175230
 attr experiment SpoofingAttack
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -10,7 +10,7 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network MinimalAttackNetwork
-attr processid 453191
+attr processid 147909
 attr repetition 0
 attr replication #0
 attr resultdir results_flat
@@ -4171,7 +4171,7 @@ par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier.out.channe
 par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier typename "\"inet.protocolelement.redundancy.StreamIdentifier\""
 par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier displayStringTextFormat "\"processed %p pk (%l)\""
 par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier hasSequenceNumbering false
-par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array81.map28., stream: \"status_updates\"}]"
+par MinimalAttackNetwork.mainECU.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array198.map65., stream: \"status_updates\"}]"
 attr mutable ""
 par MinimalAttackNetwork.mainECU.bridging.streamIdentifier typename "\"inet.protocolelement.redundancy.StreamIdentifierLayer\""
 par MinimalAttackNetwork.mainECU.bridging.streamCoder.upperLayerIn.channel typename "\"ned.IdealChannel\""
@@ -4686,7 +4686,7 @@ par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier.out
 par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier typename "\"inet.protocolelement.redundancy.StreamIdentifier\""
 par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier displayStringTextFormat "\"processed %p pk (%l)\""
 par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier hasSequenceNumbering false
-par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array90.map30., stream: \"critical_control\"}]"
+par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array207.map67., stream: \"critical_control\"}]"
 attr mutable ""
 par MinimalAttackNetwork.criticalSensor.bridging.streamIdentifier typename "\"inet.protocolelement.redundancy.StreamIdentifierLayer\""
 par MinimalAttackNetwork.criticalSensor.bridging.streamCoder.upperLayerIn.channel typename "\"ned.IdealChannel\""
@@ -5184,7 +5184,7 @@ par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier.out.channe
 par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier typename "\"inet.protocolelement.redundancy.StreamIdentifier\""
 par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier displayStringTextFormat "\"processed %p pk (%l)\""
 par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier hasSequenceNumbering false
-par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array98.map32., stream: \"display_data\"}]"
+par MinimalAttackNetwork.display.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array215.map69., stream: \"display_data\"}]"
 attr mutable ""
 par MinimalAttackNetwork.display.bridging.streamIdentifier typename "\"inet.protocolelement.redundancy.StreamIdentifierLayer\""
 par MinimalAttackNetwork.display.bridging.streamCoder.upperLayerIn.channel typename "\"ned.IdealChannel\""
@@ -5699,7 +5699,7 @@ par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier.o
 par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier typename "\"inet.protocolelement.redundancy.StreamIdentifier\""
 par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier displayStringTextFormat "\"processed %p pk (%l)\""
 par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier hasSequenceNumbering false
-par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array107.map34., stream: \"external_attack\"}]"
+par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array224.map71., stream: \"external_attack\"}]"
 attr mutable ""
 par MinimalAttackNetwork.attackerExternal.bridging.streamIdentifier typename "\"inet.protocolelement.redundancy.StreamIdentifierLayer\""
 par MinimalAttackNetwork.attackerExternal.bridging.streamCoder.upperLayerIn.channel typename "\"ned.IdealChannel\""
@@ -6119,7 +6119,7 @@ par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier.ou
 par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier typename "\"inet.protocolelement.redundancy.StreamIdentifier\""
 par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier displayStringTextFormat "\"processed %p pk (%l)\""
 par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier hasSequenceNumbering false
-par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array113.map36., stream: \"critical_control\"}]"
+par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier.identifier mapping "[{packetFilter: (omnetpp::cOwnedDynamicExpression)mapping.array230.map73., stream: \"critical_control\"}]"
 attr mutable ""
 par MinimalAttackNetwork.compromisedNode.bridging.streamIdentifier typename "\"inet.protocolelement.redundancy.StreamIdentifierLayer\""
 par MinimalAttackNetwork.compromisedNode.bridging.streamCoder.upperLayerIn.channel typename "\"ned.IdealChannel\""

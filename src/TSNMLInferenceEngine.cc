@@ -4,6 +4,8 @@
 #include <fstream>
 #include <chrono>
 #include <cmath>
+#include <sstream>
+#include <iomanip>
 
 Define_Module(TSNMLInferenceEngine);
 
@@ -40,6 +42,7 @@ void TSNMLInferenceEngine::initialize()
     attack_detected_signal = registerSignal("attackDetected");
     inference_latency_signal = registerSignal("inferenceLatency");
     confidence_signal = registerSignal("detectionConfidence");
+    inferenceResult_signal = registerSignal("inferenceResult");
     
     // Extended 15-feature order aligned with training feature_order
     // [throughput_bps_tx, packets_sent, packets_received, packets_dropped, drop_rate, queue_length_max,
@@ -251,6 +254,23 @@ bool TSNMLInferenceEngine::pullAndInferWindow()
         }
         double thr = par("anomalyThreshold");
         bool is_anomaly = p_anomaly > thr;
+
+        // --- Minimal demo instrumentation (INSERT HERE, right after inference result is computed) ---
+        // 1) concise GUI log line (shows in Module Output window & eventlog)
+        EV_INFO << "[TSNMLInferenceEngine] Inference @ t=" << simTime() << " : "
+                << (is_anomaly ? "ANOMALY" : "NORMAL") << " (prob=" << p_anomaly << ")" << endl;
+
+        // 2) update module display text (on-canvas)
+        std::ostringstream _disp;
+        _disp << (is_anomaly ? "ANOMALY" : "NORMAL") << " " << std::fixed << std::setprecision(3) << p_anomaly;
+        getDisplayString().setTagArg("t",0, _disp.str().c_str());
+
+        // 3) emit a signal for recording as a vector
+        emit(inferenceResult_signal, p_anomaly);
+
+        // 4) quick scalar record (lightweight)
+        recordScalar("lastInferenceProb", p_anomaly);
+
         auto dur = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
         total_inference_time += dur.count() / 1000.0;
         total_inferences++;

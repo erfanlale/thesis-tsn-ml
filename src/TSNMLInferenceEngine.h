@@ -38,6 +38,7 @@ private:
     simsignal_t attack_detected_signal;
     simsignal_t inference_latency_signal;
     simsignal_t confidence_signal;
+    simsignal_t inferenceResult_signal;
     
     // Attack detection state
     bool attack_detected;

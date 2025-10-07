@@ -33,7 +33,7 @@ PROJECTRELATIVE_PATH =
 O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 
 # Object files for local .cc, .msg and .sm files
-OBJS = $O/src/DataCollector.o $O/src/PerPacketCsvWriter.o $O/src/TSNMLInferenceEngine.o
+OBJS = $O/src/DataCollector.o $O/src/TSNMLInferenceEngine.o
 
 # Message files
 MSGFILES =

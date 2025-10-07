@@ -12,7 +12,6 @@
 #include <deque>
 #include <array>
 #include "CsvWriter.h"
-#include "PerPacketCsvWriter.h"
 
 // INET includes
 #include "inet/common/Simsignals.h"
@@ -60,7 +59,6 @@ protected:
     
     // Output file
     CsvWriter csv;
-    PerPacketCsvWriter packetCsv;
     bool emitPerStreamRows = false;
     CsvWriter streamCsv;
     // Expose current window features for engine (Option A)
